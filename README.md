@@ -7,7 +7,7 @@
 
 ## 1. Progress and Current Status
 
-### 1.1 What has been achieved so far
+### 1.1 What has been done so far
 
 - Pivoted the project from the original MURA X-ray classification idea to a new topic:
   **3D spleen segmentation with uncertainty estimation using MONAI**.
