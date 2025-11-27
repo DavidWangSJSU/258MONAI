@@ -60,7 +60,7 @@ Implementation and training of the baseline model are scheduled for early–mid 
 - Implement dataset download and organization scripts in the repository.  
 - Implement MONAI transforms and `Dataset`/`DataLoader` for 3D spleen segmentation.  
 - Verify that the pipeline can load and iterate through volumes without training yet.  
-- **Status:** Planned.
+- **Status:** Completed.
 
 **Nov 9 – Nov 15**  
 - Implement baseline 3D UNet training script (`train_baseline.py`).  
