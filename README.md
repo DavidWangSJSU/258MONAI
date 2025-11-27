@@ -68,13 +68,13 @@ Implementation and training of the baseline model are scheduled for early–mid 
 - Run full training on the training set with tuned hyperparameters.  
 - Implement evaluation script (`eval_baseline.py`) and compute Dice / Hausdorff on test set.  
 - Save trained model checkpoints and record baseline results.  
-- **Status:** Completed.
+- **Status:** in progress.
 
 **Nov 16 – Nov 22**  
 - Implement MC Dropout inference (`infer_mc_dropout.py`) to generate uncertainty maps.  
 - Implement calibration analysis (`calibration_analysis.py`) with ECE and reliability diagrams.  
 - Generate initial uncertainty visualizations on selected test cases.  
-- **Status:** Completed.
+- **Status:** in progress.
 
 **Nov 23 – Nov 27**  
 - Create visualization notebook (`demo.ipynb`) to show CT slices, segmentation, and uncertainty.  
