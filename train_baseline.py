@@ -7,16 +7,45 @@ import os
 import time
 
 import torch
-from torch.utils.tensorboard import SummaryWriter  # optional; you can remove if not using TB
+from torch.utils.tensorboard import SummaryWriter  # optional; remove if not using TB
 
 from monai.networks.nets import UNet
-from monai.losses import DiceCELoss
-from monai.metrics import DiceMetric
-from monai.transforms import Compose, Activations, AsDiscrete
-from monai.data import decollate_batch
 from monai.utils import set_determinism
+from monai.inferers import sliding_window_inference
 
 from dataset import get_dataloaders
+
+
+def _extract_batch(batch_data, device):
+    """
+    Handle both cases:
+    - batch_data is a dict: {"image": ..., "label": ...}
+    - batch_data is a list/tuple of dicts: [ {"image": ..., "label": ...}, ... ]
+    """
+    if isinstance(batch_data, dict):
+        data = batch_data
+    elif isinstance(batch_data, (list, tuple)) and len(batch_data) > 0 and isinstance(
+        batch_data[0], dict
+    ):
+        data = batch_data[0]
+    else:
+        raise TypeError(f"Unexpected batch_data type: {type(batch_data)}")
+
+    inputs = data["image"].to(device)
+    labels = data["label"].to(device)
+    return inputs, labels
+
+
+def dice_score(pred: torch.Tensor, target: torch.Tensor, eps: float = 1e-5) -> float:
+    """
+    Compute Dice score for binary predictions and labels.
+    pred and target should be tensors of same shape, typically [B, 1, H, W, D].
+    """
+    pred = pred.float()
+    target = target.float()
+    intersection = (pred * target).sum()
+    dice = (2.0 * intersection + eps) / (pred.sum() + target.sum() + eps)
+    return dice.item()
 
 
 def main():
@@ -26,11 +55,13 @@ def main():
     msd_root = "data/MSD/Task09_Spleen"
     batch_size = 2
     num_workers = 4
-    max_epochs = 50
+    max_epochs = 2  # small for testing; increase (e.g., 50) for real training
     learning_rate = 1e-4
     val_interval = 1  # validate every N epochs
     model_dir = "models"
     os.makedirs(model_dir, exist_ok=True)
+
+    roi_size = (96, 96, 96)  # patch size for sliding-window inference
 
     set_determinism(seed=0)
 
@@ -51,30 +82,23 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
 
+    # MONAI UNet (3D)
     model = UNet(
-        dimensions=3,
+        spatial_dims=3,
         in_channels=1,
         out_channels=1,  # binary spleen vs background
         channels=(16, 32, 64, 128, 256),
         strides=(2, 2, 2, 2),
         num_res_units=2,
         norm="batch",
+        dropout=0.2,  # enable dropout for later MC Dropout inference
     ).to(device)
 
-    loss_function = DiceCELoss(
-        sigmoid=True,
-        to_onehot_y=False,
-        squared_pred=True,
-        smooth_nr=0.0,
-        smooth_dr=1e-5,
-    )
+    # Simple binary segmentation loss (logits + BCE)
+    loss_function = torch.nn.BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-5)
 
-    dice_metric = DiceMetric(include_background=True, reduction="mean")
-    post_pred = Compose([Activations(sigmoid=True), AsDiscrete(threshold=0.5)])
-    post_label = Compose([AsDiscrete(threshold=0.5)])
-
-    # Optional: TensorBoard logger (you can comment this out if you don’t use it)
+    # Optional: TensorBoard logger
     writer = SummaryWriter(log_dir=os.path.join(model_dir, "runs"))
 
     best_metric = -1.0
@@ -91,17 +115,16 @@ def main():
         print(f"Epoch {epoch}/{max_epochs}")
 
         model.train()
-        epoch_loss = 0
+        epoch_loss = 0.0
         step = 0
 
         for batch_data in train_loader:
             step += 1
-            inputs = batch_data["image"].to(device)
-            labels = batch_data["label"].to(device)
+            inputs, labels = _extract_batch(batch_data, device)
 
             optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = loss_function(outputs, labels)
+            outputs = model(inputs)  # logits
+            loss = loss_function(outputs, labels.float())
             loss.backward()
             optimizer.step()
 
@@ -109,45 +132,48 @@ def main():
             if step % 10 == 0:
                 print(f"  step {step:3d} / loss = {loss.item():.4f}")
 
-        epoch_loss /= step
+        epoch_loss /= max(step, 1)
         elapsed = time.time() - start_time
         print(f"Epoch {epoch} average loss: {epoch_loss:.4f} (time: {elapsed:.1f}s)")
         writer.add_scalar("train/loss", epoch_loss, epoch)
 
         # -----------------------
-        # Validation
+        # Validation (with sliding-window inference)
         # -----------------------
         if epoch % val_interval == 0:
             model.eval()
+            val_dices = []
             with torch.no_grad():
-                dice_metric.reset()
                 for val_data in val_loader:
-                    val_images = val_data["image"].to(device)
-                    val_labels = val_data["label"].to(device)
+                    val_inputs, val_labels = _extract_batch(val_data, device)
 
-                    val_outputs = model(val_images)
-
-                    # decollate into list of [C,H,W,D] tensors, apply post transforms
-                    val_outputs_list = [post_pred(i) for i in decollate_batch(val_outputs)]
-                    val_labels_list = [post_label(i) for i in decollate_batch(val_labels)]
-
-                    dice_metric(y_pred=val_outputs_list, y=val_labels_list)
-
-                metric = dice_metric.aggregate().item()
-                dice_metric.reset()
-
-                print(f"Validation Dice: {metric:.4f}")
-                writer.add_scalar("val/dice", metric, epoch)
-
-                # Save best model
-                if metric > best_metric:
-                    best_metric = metric
-                    best_metric_epoch = epoch
-                    torch.save(model.state_dict(), best_model_path)
-                    print(
-                        f"  New best metric: {best_metric:.4f} at epoch {best_metric_epoch}. "
-                        f"Saved model to {best_model_path}"
+                    # sliding-window inference handles arbitrary volume sizes safely
+                    val_logits = sliding_window_inference(
+                        val_inputs,
+                        roi_size=roi_size,
+                        sw_batch_size=1,
+                        predictor=model,
                     )
+                    probs = torch.sigmoid(val_logits)
+                    preds = (probs > 0.5).float()
+
+                    dice = dice_score(preds, val_labels)
+                    val_dices.append(dice)
+
+            metric = sum(val_dices) / len(val_dices) if len(val_dices) > 0 else 0.0
+
+            print(f"Validation Dice: {metric:.4f}")
+            writer.add_scalar("val/dice", metric, epoch)
+
+            # Save best model
+            if metric > best_metric:
+                best_metric = metric
+                best_metric_epoch = epoch
+                torch.save(model.state_dict(), best_model_path)
+                print(
+                    f"  New best metric: {best_metric:.4f} at epoch {best_metric_epoch}. "
+                    f"Saved model to {best_model_path}"
+                )
 
     print(
         f"Training completed. Best validation Dice: {best_metric:.4f} at epoch {best_metric_epoch}"
