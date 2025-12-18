@@ -33,13 +33,13 @@ Implementation and training of the baseline model are scheduled for early–mid 
 
 | Module                                  | Description                                                                                      | Status               | Planned Code Location |
 |-----------------------------------------|--------------------------------------------------------------------------------------------------|----------------------|-----------------------|
-| Dataset & I/O pipeline                  | Download Task09_Spleen, organize files, create MONAI `Dataset` / `DataLoader`                   | **Planned**          | `data/`, `dataset.py` |
-| Data preprocessing & augmentation       | Spacing, intensity normalization, random cropping, flipping, etc. using MONAI transforms        | **Planned**          | `transforms.py`       |
-| Baseline 3D UNet segmentation model     | Standard 3D UNet from MONAI with Dice + cross-entropy loss                                      | **Planned**          | `train_baseline.py`   |
-| Baseline evaluation script              | Compute Dice and Hausdorff distance on validation/test sets                                     | **Planned**          | `eval_baseline.py`    |
-| Uncertainty (MC Dropout) inference      | Enable dropout at inference; multiple forward passes; compute voxel-wise variance               | **Planned**          | `infer_mc_dropout.py` |
-| Calibration & reliability analysis      | Compute confidence histograms, Expected Calibration Error (ECE), reliability curves             | **Planned**          | `calibration_analysis.py` |
-| Visualization / demo                    | Jupyter notebook or simple app to visualize CT slices, masks, and uncertainty maps             | **Planned**          | `demo.ipynb`          |
+| Dataset & I/O pipeline                  | Download Task09_Spleen, organize files, create MONAI `Dataset` / `DataLoader`                   | **Completed**          | `data/`, `dataset.py` |
+| Data preprocessing & augmentation       | Spacing, intensity normalization, random cropping, flipping, etc. using MONAI transforms        | **Completed**          | `transforms.py`       |
+| Baseline 3D UNet segmentation model     | Standard 3D UNet from MONAI with Dice + cross-entropy loss                                      | **Completed**          | `train_baseline.py`   |
+| Baseline evaluation script              | Compute Dice and Hausdorff distance on validation/test sets                                     | **Completed**          | `eval_baseline.py`    |
+| Uncertainty (MC Dropout) inference      | Enable dropout at inference; multiple forward passes; compute voxel-wise variance               | **Completed**          | `infer_mc_dropout.py` |
+| Calibration & reliability analysis      | Compute confidence histograms, Expected Calibration Error (ECE), reliability curves             | **Completed**          | `calibration_analysis.py` |
+| Visualization / demo                    | Jupyter notebook or simple app to visualize CT slices, masks, and uncertainty maps             | **Completed**          | `demo.ipynb`          |
 
 ---
 
@@ -68,25 +68,25 @@ Implementation and training of the baseline model are scheduled for early–mid 
 - Run full training on the training set with tuned hyperparameters.  
 - Implement evaluation script (`eval_baseline.py`) and compute Dice / Hausdorff on test set.  
 - Save trained model checkpoints and record baseline results.  
-- **Status:** in progress.
+- **Status:** Completed.
 
 **Nov 16 – Nov 22**  
 - Implement MC Dropout inference (`infer_mc_dropout.py`) to generate uncertainty maps.  
 - Implement calibration analysis (`calibration_analysis.py`) with ECE and reliability diagrams.  
 - Generate initial uncertainty visualizations on selected test cases.  
-- **Status:** in progress.
+- **Status:** Completed.
 
 **Nov 23 – Nov 27**  
 - Create visualization notebook (`demo.ipynb`) to show CT slices, segmentation, and uncertainty.  
 - Perform error analysis and select representative examples (good, borderline, and failure cases).  
 - Draft main sections of the final report (Methods, Experiments, Results, Discussion).  
-- **Status:** In Progress.
+- **Status:** Completed.
 
 **Nov 28 – Nov 29**  
 - Finalize report, README, and comments in the `258MONAI` repository.  
 - Prepare any slides or summary documents required by the course.  
-- Submit project materials and complete project.  
-- **Status:** In Porgress.
+- Submit project materials and complete the project.  
+- **Status:** Completed.
 
 ---
 
